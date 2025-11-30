@@ -130,11 +130,16 @@ class Teacher_Two:
     
 
 
-    def save_sample(self, dst_step, obs, action, obs_, save_path):
+    def save_sample(self, dst_step, line_to_disconnect, obs, action, obs_, save_path):
         if action == self.env.action_space({}):
             return None  # not necessary to save a "do nothing" action
+
         act_or, act_ex, act_gen, act_load = [], [], [], []
-        for key, val in action.as_dict()['change_bus_vect'][action.as_dict()['change_bus_vect']['modif_subs_id'][0]].items():
+
+        act_dict = action.as_dict()['change_bus_vect']
+        sub_id = act_dict['modif_subs_id'][0]
+
+        for key, val in act_dict[sub_id].items():
             if val['type'] == 'line (extremity)':
                 act_ex.append(key)
             elif val['type'] == 'line (origin)':
@@ -143,19 +148,40 @@ class Teacher_Two:
                 act_load.append(key)
             else:
                 act_gen.append(key)
-        pd.concat(
-            (
-                pd.DataFrame(
-                    np.array(
-                        [self.env.chronics_handler.get_name(), dst_step, None, None, None,
-                        str(np.where(obs.rho > 1)[0].tolist()),
-                        str([i for i in np.around(obs.rho[np.where(obs.rho > 1)], 2)]),
-                        action.as_dict()['change_bus_vect']['modif_subs_id'][0], act_or, act_ex, act_gen, act_load,
-                        obs.rho.max(), obs.rho.argmax(), obs_.rho.max(), obs_.rho.argmax()]).reshape([1, -1])),
-                pd.DataFrame(np.concatenate((obs.to_vect(), obs_.to_vect(), action.to_vect())).reshape([1, -1]))
-            ),
-            axis=1
-        ).to_csv(os.path.join(save_path, 'Experiences2.csv'), index=0, header=0, mode='a')
+
+        # meta info row – convert list-like fields to strings
+        meta_row = [
+            self.env.chronics_handler.get_name(),
+            dst_step,
+            line_to_disconnect,
+            self.env.line_or_to_subid[line_to_disconnect],
+            self.env.line_ex_to_subid[line_to_disconnect],
+            str(np.where(obs.rho > 1)[0].tolist()),
+            str([float(i) for i in np.around(obs.rho[np.where(obs.rho > 1)], 2)]),
+            sub_id,
+            str(act_or),
+            str(act_ex),
+            str(act_gen),
+            str(act_load),
+            float(obs.rho.max()),
+            int(obs.rho.argmax()),
+            float(obs_.rho.max()),
+            int(obs_.rho.argmax()),
+        ]
+
+        df_meta = pd.DataFrame([meta_row])
+
+        # obs, next_obs, action vectors
+        vec = np.concatenate((obs.to_vect(), obs_.to_vect(), action.to_vect()))
+        df_vec = pd.DataFrame([vec])
+
+        pd.concat((df_meta, df_vec), axis=1).to_csv(
+            os.path.join(save_path, 'Experiences1.csv'),
+            index=False,
+            header=False,
+            mode='a'
+        )
+
 
     
     def find_best_line_to_reconnect(self, obs, original_action):
