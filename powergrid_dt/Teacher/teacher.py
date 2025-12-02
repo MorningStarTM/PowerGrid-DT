@@ -15,6 +15,8 @@ class Teacher_One:
         self.save_path = config['save_path']
         self.config = config
 
+        os.makedirs(self.save_path, exist_ok=True)
+
     def topology_search(self, dst_step):
         obs = self.env.get_obs()
         min_rho, overflow_id = obs.rho.max(), obs.rho.argmax()
